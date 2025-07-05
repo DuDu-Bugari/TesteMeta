@@ -12,8 +12,8 @@ const drop = document.getElementById('fieldSelect');
 
 // Load data
 Promise.all([
-  fetch('data/perimetro.geojson').then(r=>r.json()),
-  fetch('data/pontos.geojson').then(r=>r.json())
+  fetch('perimetro.geojson').then(r=>r.json()),
+  fetch('pontos.geojson').then(r=>r.json())
 ]).then(([perim, pontos])=>{
   perimLayer = L.geoJSON(perim, {style:{color:'#333',fill:false}}).addTo(map);
   map.fitBounds(perimLayer.getBounds());
