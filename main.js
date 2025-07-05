@@ -1,30 +1,34 @@
+// main.js
 
-// Map init
+// Inicializa o mapa
 const map = L.map('map').setView([-13.15, -53.42], 14);
 
-// Base layer
+// Camada de fundo OpenStreetMap
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   attribution: '&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-let pointsData, perimLayer, idwLayer;
+let pointsData, perimLayer, heatLayer;
 const drop = document.getElementById('fieldSelect');
 
-// Load data
+// Carrega perímetro e pontos GeoJSON
 Promise.all([
-  fetch('perimetro.geojson').then(r=>r.json()),
-  fetch('pontos.geojson').then(r=>r.json())
-]).then(([perim, pontos])=>{
-  perimLayer = L.geoJSON(perim, {style:{color:'#333',fill:false}}).addTo(map);
+  fetch('perimetro.geojson').then(r => r.json()),
+  fetch('pontos.geojson').then(r => r.json())
+]).then(([perim, pontos]) => {
+  // Desenha o perímetro
+  perimLayer = L.geoJSON(perim, { style: { color: '#333', fill: false } })
+                   .addTo(map);
   map.fitBounds(perimLayer.getBounds());
 
+  // Guarda os pontos em memória
   pointsData = pontos;
 
-  // Populate dropdown with numeric fields
-  const sampleProps = pontos.features[0].properties;
-  for(const k in sampleProps){
-    const v = sampleProps[k];
-    if(typeof v === 'number' && !Number.isNaN(v)){
+  // Popula o dropdown apenas com atributos numéricos
+  const sample = pontos.features[0].properties;
+  for (const k in sample) {
+    const v = Number(sample[k]);
+    if (Number.isFinite(v)) {
       const opt = document.createElement('option');
       opt.value = k;
       opt.textContent = k;
@@ -32,26 +36,42 @@ Promise.all([
     }
   }
 
-  drop.addEventListener('change', updateIdw);
-  updateIdw();
+  // Dispara o primeiro desenho
+  drop.addEventListener('change', updateHeat);
+  updateHeat();
 });
 
-function updateIdw(){
-  if(idwLayer){ map.removeLayer(idwLayer);}
-  const field = drop.value;
-  // convert to array for plugin [lat,lng,value]
-  const data = pointsData.features.map(f=>{
-    const coords = f.geometry.coordinates; // [lng,lat]
-    const val = f.properties[field];
-    return [coords[1], coords[0], val];
-  });
+// Função que desenha o heatmap
+function updateHeat() {
+  // Remove camada anterior (se existir)
+  if (heatLayer) {
+    map.removeLayer(heatLayer);
+  }
 
-  idwLayer = L.idwLayer(data, {
-    opacity: 0.7,
-    cellSize: 50, // pixel size, adjust if necessary
-    exp: 2,
-    max: Math.max(...data.map(d=>d[2])),
-    gradient:{0.0:'green',0.5:'yellow',1.0:'red'}
-  });
-  idwLayer.addTo(map);
+  const field = drop.value;
+  // Transformar em array [lat, lng, valor]
+  const heatData = pointsData.features
+    .map(f => {
+      const [lng, lat] = f.geometry.coordinates;
+      const val = Number(f.properties[field]);
+      return Number.isFinite(val) ? [lat, lng, val] : null;
+    })
+    .filter(Boolean);
+
+  if (heatData.length === 0) {
+    alert('Nenhum valor numérico encontrado para ' + field);
+    return;
+  }
+
+  // Adiciona o heatmap
+  heatLayer = L.heatLayer(heatData, {
+    radius: 25,       // tamanho do “ponto”
+    blur: 15,         // nível de desfoque
+    maxZoom: 17,
+    gradient: {
+      0.0: 'green',
+      0.5: 'yellow',
+      1.0: 'red'
+    }
+  }).addTo(map);
 }
